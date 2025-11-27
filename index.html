@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Task Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'Baloo 2', cursive;
+    background: linear-gradient(to right, #ffe6e6, #fff5cc);
+    color: #333;
+    transition: background 0.3s, color 0.3s;
+    padding: 10px;
+  }
+  body.dark {
+    background: linear-gradient(to right, #2b2b2b, #444);
+    color: #eee;
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 10px;
+    color: #ff6b6b;
+  }
+  #toggleTheme {
+    margin: 10px auto;
+    display: block;
+    padding: 8px 15px;
+    cursor: pointer;
+    border: none;
+    background-color: #4ecdc4;
+    color: #fff;
+    font-weight: bold;
+    border-radius: 20px;
+    transition: 0.3s;
+  }
+  #toggleTheme:hover {
+    background-color: #38b2ac;
+  }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 30px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 12px;
+    text-align: center;
+  }
+  th {
+    background: #4ecdc4;
+    color: white;
+    font-size: 16px;
+  }
+  body.dark th { background: #1a8f87; }
+  tr:nth-child(even) { background: #fff7e6; }
+  body.dark tr:nth-child(even) { background: #333; }
+  tr:nth-child(odd) { background: #ffe6e6; }
+  body.dark tr:nth-child(odd) { background: #444; }
+  .task-category {
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 12px;
+    color: white;
+    display: inline-block;
+    font-size: 13px;
+  }
+  .Chores { background-color: #ff6b6b; }
+  .School { background-color: #4ecdc4; }
+  .Personal { background-color: #ffd93d; color: #333; }
+  .overdue { color: red; font-weight: bold; }
+  input[type="text"], input[type="time"], select {
+    width: 90%;
+    padding: 5px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+  }
+  input[type="checkbox"] {
+    transform: scale(1.3);
+    margin-top: 5px;
+  }
+  #addTask {
+    display: block;
+    margin: 0 auto 20px auto;
+    padding: 8px 15px;
+    background-color: #ff6b6b;
+    border: none;
+    color: #fff;
+    font-weight: bold;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+  #addTask:hover { background-color: #e55b5b; }
+  canvas { background: #fff; border-radius: 15px; padding: 15px; box-shadow: 0 5px 10px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+
+<h1>Daily Task Tracker</h1>
+<button id="toggleTheme">Toggle Dark/Light Mode</button>
+
+<table id="taskTable">
+  <thead>
+    <tr>
+      <th>Task</th>
+      <th>Category</th>
+      <th>Deadline</th>
+    </tr>
+  </thead>
+  <tbody id="taskBody">
+    <!-- Tasks dynamically inserted -->
+  </tbody>
+</table>
+
+<button id="addTask">Add New Task</button>
+
+<canvas id="progressChart" style="max-width: 600px; margin: auto;"></canvas>
+
+<script>
+// ===== JS logic from previous version =====
+let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+let dailyProgress = JSON.parse(localStorage.getItem('dailyProgress')) || {};
+const today = new Date().toISOString().split('T')[0];
+
+function saveTasks() { localStorage.setItem('tasks', JSON.stringify(tasks)); }
+function saveProgress() { localStorage.setItem('dailyProgress', JSON.stringify(dailyProgress)); }
+
+function addTaskRow(task) {
+  const tbody = document.getElementById('taskBody');
+  const tr = document.createElement('tr');
+
+  const tdTask = document.createElement('td');
+  const inputTask = document.createElement('input');
+  inputTask.type = 'text';
+  inputTask.value = task.name;
+  inputTask.onchange = () => { task.name = inputTask.value; saveTasks(); };
+  tdTask.appendChild(inputTask);
+
+  const selectCat = document.createElement('select');
+  ['Chores','School','Personal'].forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.text = c;
+    if(task.category === c) opt.selected = true;
+    selectCat.appendChild(opt);
+  });
+  selectCat.onchange = () => { task.category = selectCat.value; saveTasks(); renderTasks(); };
+  const tdCat = document.createElement('td'); tdCat.appendChild(selectCat);
+
+  const inputTime = document.createElement('input');
+  inputTime.type = 'time';
+  inputTime.value = task.deadline || '';
+  inputTime.onchange = () => { task.deadline = inputTime.value; saveTasks(); checkOverdue(task, tdDeadline); renderProgress(); };
+  const tdDeadline = document.createElement('td'); tdDeadline.appendChild(inputTime);
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = dailyProgress[today]?.[task.name] || false;
+  checkbox.onchange = () => {
+    dailyProgress[today] = dailyProgress[today] || {};
+    dailyProgress[today][task.name] = checkbox.checked;
+    saveProgress();
+    renderProgress();
+  };
+  tdTask.appendChild(document.createElement('br'));
+  tdTask.appendChild(checkbox);
+
+  tr.appendChild(tdTask);
+  tr.appendChild(tdCat);
+  tr.appendChild(tdDeadline);
+  tbody.appendChild(tr);
+
+  checkOverdue(task, tdDeadline);
+}
+
+function checkOverdue(task, tdDeadline) {
+  tdDeadline.classList.remove('overdue');
+  if(task.deadline) {
+    const now = new Date();
+    const [h, m] = task.deadline.split(':');
+    const deadlineDate = new Date();
+    deadlineDate.setHours(h, m, 0, 0);
+    if(now > deadlineDate && !dailyProgress[today]?.[task.name]) tdDeadline.classList.add('overdue');
+  }
+}
+
+function renderTasks() { 
+  const tbody = document.getElementById('taskBody'); 
+  tbody.innerHTML = ''; 
+  tasks.forEach(task => addTaskRow(task)); 
+}
+
+function addNewTask() {
+  const newTask = { name: 'New Task', category: 'Chores', deadline: '' };
+  tasks.push(newTask); saveTasks(); renderTasks(); renderProgress();
+}
+
+function renderProgress() {
+  const ctx = document.getElementById('progressChart').getContext('2d');
+  const labels = Object.keys(dailyProgress).slice(-7);
+  const data = labels.map(day => {
+    const dayTasks = dailyProgress[day];
+    const completed = Object.values(dayTasks).filter(v=>v).length;
+    const total = Object.keys(dayTasks).length;
+    return total ? Math.round(completed/total*100) : 0;
+  });
+  if(window.myChart) window.myChart.destroy();
+  window.myChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: '% Tasks Completed', data, backgroundColor: '#ff6b6b' }] },
+    options: { scales: { y: { beginAtZero: true, max: 100 } } }
+  });
+}
+
+document.getElementById('addTask').onclick = addNewTask;
+document.getElementById('toggleTheme').onclick = () => { document.body.classList.toggle('dark'); };
+if(!dailyProgress[today]) dailyProgress[today] = {};
+renderTasks();
+renderProgress();
+setInterval(() => tasks.forEach(task => renderTasks()), 60000);
+</script>
+</body>
+</html>
