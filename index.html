@@ -102,6 +102,7 @@
     padding: 15px;
     box-shadow: 0 5px 10px rgba(0,0,0,0.1);
     margin-bottom: 30px;
+    max-width: 100%;
   }
 </style>
 </head>
@@ -140,7 +141,7 @@
 
   <button id="addTask">Add New Task</button>
 
-  <canvas id="progressChart" style="max-width: 100%;"></canvas>
+  <canvas id="progressChart" style="height: 300px;"></canvas>
 
 </div>
 
@@ -308,7 +309,12 @@ document.getElementById("addTask").onclick = addNewTask;
 // ===== PROGRESS CHART =====
 function renderProgress() {
   const ctx = document.getElementById("progressChart").getContext("2d");
-  const labels = Object.keys(dailyProgress).slice(-7);
+
+  // Sort last 7 days chronologically
+  const labels = Object.keys(dailyProgress)
+    .sort((a,b) => new Date(a) - new Date(b))
+    .slice(-7);
+
   const data = labels.map(day => {
     const entries = dailyProgress[day];
     const completed = Object.values(entries).filter(v => v).length;
@@ -320,15 +326,8 @@ function renderProgress() {
 
   window.myChart = new Chart(ctx, {
     type: "bar",
-    data: {
-      labels,
-      datasets: [
-        { label: "% Tasks Completed", data, backgroundColor: "#ff6b6b" }
-      ]
-    },
-    options: {
-      scales: { y: { beginAtZero: true, max: 100 } }
-    }
+    data: { labels, datasets: [{ label: "% Tasks Completed", data, backgroundColor: "#ff6b6b" }] },
+    options: { scales: { y: { beginAtZero: true, max: 100 } } }
   });
 }
 
